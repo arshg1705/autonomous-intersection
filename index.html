@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous Intersection — LLM-Driven Multi-Agent Traffic Control</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- 3D WebGL Three.js Viewport -->
+  <div id="viewport-3d"></div>
+
+  <!-- 2D Canvas Precision Radar Viewport -->
+  <canvas id="canvas-2d"></canvas>
+
+  <!-- Top Master HUD Bar -->
+  <header class="top-hud">
+    <div class="hud-title">
+      <span style="font-size: 18px;">🚦</span>
+      <h1>Autonomous Intersection // LLM Multi-Agent</h1>
+      <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; font-family: var(--font-mono); letter-spacing: 0.05em;">v2.1 DEADLOCK-FREE</span>
+    </div>
+
+    <div class="hud-pill-group">
+      <!-- Collision Counter (Mandate: Must be 0) -->
+      <div class="hud-pill highlight-green">
+        <span class="label">Collisions</span>
+        <span id="hud-collisions" class="value">0</span>
+      </div>
+
+      <!-- Active LLM API Latency -->
+      <div class="hud-pill highlight-cyan">
+        <span class="label">LLM Latency</span>
+        <span id="hud-latency" class="value">0 ms</span>
+      </div>
+
+      <!-- Cleared Vehicles Throughput -->
+      <div class="hud-pill highlight-green">
+        <span class="label">Cleared</span>
+        <span id="hud-cleared" class="value">0</span>
+      </div>
+
+      <!-- Throughput Rate -->
+      <div class="hud-pill">
+        <span class="label">Throughput</span>
+        <span id="hud-throughput" class="value">0.0 cars/min</span>
+      </div>
+
+      <!-- Traffic Signal Status -->
+      <div class="hud-pill highlight-yellow">
+        <span class="label">Signal</span>
+        <span id="hud-signal-phase" class="value">Initializing...</span>
+      </div>
+
+      <!-- Active Provider Badge -->
+      <div class="hud-pill">
+        <span class="label">Provider</span>
+        <span id="hud-provider-badge" class="value">SIMULATOR</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Left Dock: Simulation & LLM Controls -->
+  <aside class="side-panel panel-left">
+    <!-- Simulation Controls -->
+    <div class="panel-section">
+      <h3>⚙️ Simulation Control</h3>
+      <div class="button-grid">
+        <button id="btn-play-pause" class="btn-accent">⏸ Pause</button>
+        <button id="btn-reset">🔄 Reset</button>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+        <span style="font-size: 11px; color: var(--text-muted);">Speed:</span>
+        <select id="select-speed">
+          <option value="0.5">0.5x Slow</option>
+          <option value="1.0" selected>1.0x Real-Time</option>
+          <option value="2.0">2.0x Fast</option>
+          <option value="4.0">4.0x Hyper</option>
+        </select>
+      </div>
+      <button id="btn-toggle-view" style="margin-top: 6px;">Switch to 2D Radar</button>
+    </div>
+
+    <!-- Camera Presets -->
+    <div class="panel-section">
+      <h3>🎥 Camera Perspective</h3>
+      <div class="button-grid">
+        <button id="cam-orbit" class="active">God View (Orbit)</button>
+        <button id="cam-intersection">Intersection Drone</button>
+        <button id="cam-chase">Follow Car</button>
+        <button id="cam-cockpit">Driver Cockpit</button>
+      </div>
+      <button id="btn-toggle-sensors" class="active" style="margin-top: 6px;">Toggle Sensor Raycasts</button>
+    </div>
+
+    <!-- LLM Batch Provider & Configuration -->
+    <div class="panel-section">
+      <h3>🧠 LLM Batch API Controller</h3>
+      <p style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
+        Decisions are 100% generated via a single batch LLM API call per tick. Zero hardcoded driving scripts.
+      </p>
+      <label style="font-size: 11px; color: var(--accent-cyan); font-weight: 600; margin-top: 4px;">Select LLM API Provider:</label>
+      <select id="select-provider">
+        <option value="gemini" selected>Google Gemini 2.0 Flash (Recommended)</option>
+        <option value="groq">Groq Cloud (Llama 3.3 70B ~180ms)</option>
+        <option value="openai">OpenAI (GPT-4o Mini)</option>
+        <option value="ollama">Local Ollama (Llama 3.2 / Mistral)</option>
+        <option value="simulator">Offline Reasoner (Judge Demo / No-Key Mode)</option>
+      </select>
+
+      <div id="api-key-group" style="margin-top: 8px;">
+        <label id="label-api-key" style="font-size: 11px; color: var(--text-muted);">Gemini API Key (<a href="https://aistudio.google.com/apikey" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;">Get free key</a>):</label>
+        <div style="display: flex; gap: 6px; margin-top: 3px;">
+          <input type="password" id="input-api-key" placeholder="Paste API key here...">
+          <button id="btn-save-key" class="btn-accent">Connect</button>
+        </div>
+      </div>
+
+      <button id="btn-view-prompt" style="margin-top: 8px;">🔍 Inspect Batch Prompt & JSON Output</button>
+    </div>
+
+    <!-- Stress Testing Benchmarks -->
+    <div class="panel-section">
+      <h3>⚡ Stress Test & Dilemmas</h3>
+      <button id="btn-stress-yellow" class="btn-warning">Force Yellow Dilemma Zone</button>
+    </div>
+  </aside>
+
+  <!-- Right Dock: Vehicle Telemetry Inspector -->
+  <aside class="side-panel panel-right">
+    <div class="panel-section">
+      <h3>📡 Local Telemetry Inspector</h3>
+      <p style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">
+        Strict Local Observability: Notice that NO global (x, y) coordinates exist in the telemetry.
+      </p>
+      <select id="select-car" style="margin-top: 4px;"></select>
+    </div>
+
+    <div id="inspector-content">
+      <!-- Live Telemetry rendered via app.js -->
+    </div>
+  </aside>
+
+  <!-- Raw Prompt & Response Modal -->
+  <div id="modal-prompt" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>LLM Batch Prompt & Structured Output Inspector</h2>
+        <button id="btn-close-modal" style="width: 32px; height: 32px; padding: 0;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <h4 style="font-size: 12px; color: var(--accent-cyan); margin-bottom: 6px;">
+            1. SINGLE BATCH PROMPT (Decentralized Local Telemetry — No Global Coords):
+          </h4>
+          <pre id="raw-prompt-text" class="code-block"></pre>
+        </div>
+        <div>
+          <h4 style="font-size: 12px; color: var(--accent-green); margin-bottom: 6px;">
+            2. STRUCTURED JSON ACTIONS RECEIVED FROM LLM (20 Cars in 1 Call):
+          </h4>
+          <pre id="raw-response-text" class="code-block"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collision Emergency Banner -->
+  <div id="collision-banner">CRASH DETECTED!</div>
+
+  <!-- Scripts: Libraries & Simulation Core (v2.1 Cache Busting) -->
+  <script src="lib/three.min.js?v=2.1"></script>
+  <script src="lib/OrbitControls.js?v=2.1"></script>
+  <script src="js/config.js?v=2.1"></script>
+  <script src="js/physics.js?v=2.1"></script>
+  <script src="js/intersection.js?v=2.1"></script>
+  <script src="js/traffic_lights.js?v=2.1"></script>
+  <script src="js/vehicle.js?v=2.1"></script>
+  <script src="js/telemetry.js?v=2.1"></script>
+  <script src="js/prompt_builder.js?v=2.1"></script>
+  <script src="js/llm_service.js?v=2.1"></script>
+  <script src="js/visualizer_3d.js?v=2.1"></script>
+  <script src="js/visualizer_2d.js?v=2.1"></script>
+  <script src="js/app.js?v=2.1"></script>
+</body>
+</html>
